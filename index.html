@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Smart Image Tool | クロップ・スタンプ・リサイズ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/psd.js/3.2.0/psd.min.js"></script>
+    <!-- psd.js の読み込み先を変更し、エラー時のフォールバックを考慮 -->
+    <script src="https://unpkg.com/psd@3.2.0/dist/psd.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet">
     <style>
@@ -457,6 +458,14 @@
             showLoading(true, "読み込んでいます...");
 
             if (file.name.toLowerCase().endsWith('.psd')) {
+                // Check if PSD library is loaded
+                if (typeof PSD === 'undefined') {
+                    alert('PSDライブラリが正常に読み込まれていません。ページを更新するか、別の形式(PNG/JPG)を試してください。');
+                    showLoading(false);
+                    UI.fileInput.value = '';
+                    return;
+                }
+
                 const url = URL.createObjectURL(file);
                 PSD.fromURL(url).then(psd => {
                     const pngUrl = psd.image.toBase64();
