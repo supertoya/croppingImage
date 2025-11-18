@@ -592,10 +592,19 @@
         }
 
         function addStamp(img) {
+            // Add stamp to current viewport center
+            let drawParams = getDrawParams();
+            const canvasCX = UI.canvas.width / 2;
+            const canvasCY = UI.canvas.height / 2;
+            const viewCX = (canvasCX - drawParams.dx) / drawParams.scale;
+            const viewCY = (canvasCY - drawParams.dy) / drawParams.scale;
+
             const targetSize = Math.min(state.width, state.height) * 0.3;
             const scale = targetSize / Math.max(img.width, img.height);
-            const x = (state.width - img.width * scale) / 2;
-            const y = (state.height - img.height * scale) / 2;
+            
+            const x = viewCX - (img.width * scale) / 2;
+            const y = viewCY - (img.height * scale) / 2;
+            
             state.stamps.push({ img: img, width: img.width, height: img.height, x: x, y: y, scale: scale });
             state.selectedStampIndex = state.stamps.length - 1;
             updateStampUI();
@@ -605,8 +614,6 @@
         function updateStampUI() {
             if (state.selectedStampIndex >= 0 && state.stamps[state.selectedStampIndex]) {
                 UI.stampControls.classList.remove('hidden');
-                UI.stampSizeSlider.value = 1.0; // Reset to relative center? No, just keep as is for simple interaction
-                // For consistent slider behavior, we might want to track absolute scale but for now relative adjustment is fine
                 UI.stampSizeSlider.value = 1.0; 
             } else {
                 UI.stampControls.classList.add('hidden');
@@ -807,7 +814,6 @@
                 const stamp = state.stamps[state.selectedStampIndex];
                 const drawParams = getDrawParams();
                 
-                // Calculate current dist from stamp center (screen space)
                 const sx = drawParams.dx + stamp.x * drawParams.scale;
                 const sy = drawParams.dy + stamp.y * drawParams.scale;
                 const sw = stamp.width * stamp.scale * drawParams.scale;
@@ -820,7 +826,6 @@
                 
                 const newScale = state.initialScale * scaleRatio;
                 
-                // Apply centering logic similar to slider
                 const oldW = stamp.width * stamp.scale;
                 const oldH = stamp.height * stamp.scale;
                 stamp.scale = newScale;
@@ -842,30 +847,59 @@
                 state.activeSnapLines = [];
 
                 if (UI.snapToggle.checked) {
-                    const threshold = 10 / drawParams.scale;
+                    // スナップ判定: 画面上で15px以内
+                    const threshold = 15 / drawParams.scale;
                     const stampW = stamp.width * stamp.scale;
                     const stampH = stamp.height * stamp.scale;
                     
+                    // プレビューエリア（キャンバス）の中心と端を計算 (画像座標系)
+                    const canvasCX = UI.canvas.width / 2;
+                    const canvasCY = UI.canvas.height / 2;
+                    
+                    const viewLeft = (0 - drawParams.dx) / drawParams.scale;
+                    const viewRight = (UI.canvas.width - drawParams.dx) / drawParams.scale;
+                    const viewTop = (0 - drawParams.dy) / drawParams.scale;
+                    const viewBottom = (UI.canvas.height - drawParams.dy) / drawParams.scale;
+                    
+                    const viewCX = (viewLeft + viewRight) / 2;
+                    const viewCY = (viewTop + viewBottom) / 2;
+                    
                     let snappedX = false;
-                    if (Math.abs((newX + stampW / 2) - (state.width / 2)) < threshold) {
-                        newX = (state.width / 2) - stampW / 2;
-                        state.activeSnapLines.push({type: 'v', pos: state.width / 2});
+                    // 横方向：中心吸着
+                    if (Math.abs((newX + stampW / 2) - viewCX) < threshold) {
+                        newX = viewCX - stampW / 2;
+                        state.activeSnapLines.push({type: 'v', pos: viewCX});
                         snappedX = true;
                     }
+                    // 横方向：端吸着
                     if (!snappedX) {
-                        if (Math.abs(newX - 0) < threshold) { newX = 0; state.activeSnapLines.push({type: 'v', pos: 0}); }
-                        else if (Math.abs((newX + stampW) - state.width) < threshold) { newX = state.width - stampW; state.activeSnapLines.push({type: 'v', pos: state.width}); }
+                        if (Math.abs(newX - viewLeft) < threshold) { 
+                            newX = viewLeft; 
+                            state.activeSnapLines.push({type: 'v', pos: viewLeft}); 
+                        }
+                        else if (Math.abs((newX + stampW) - viewRight) < threshold) { 
+                            newX = viewRight - stampW; 
+                            state.activeSnapLines.push({type: 'v', pos: viewRight}); 
+                        }
                     }
 
                     let snappedY = false;
-                    if (Math.abs((newY + stampH / 2) - (state.height / 2)) < threshold) {
-                        newY = (state.height / 2) - stampH / 2;
-                        state.activeSnapLines.push({type: 'h', pos: state.height / 2});
+                    // 縦方向：中心吸着
+                    if (Math.abs((newY + stampH / 2) - viewCY) < threshold) {
+                        newY = viewCY - stampH / 2;
+                        state.activeSnapLines.push({type: 'h', pos: viewCY});
                         snappedY = true;
                     }
+                    // 縦方向：端吸着
                     if (!snappedY) {
-                         if (Math.abs(newY - 0) < threshold) { newY = 0; state.activeSnapLines.push({type: 'h', pos: 0}); }
-                         else if (Math.abs((newY + stampH) - state.height) < threshold) { newY = state.height - stampH; state.activeSnapLines.push({type: 'h', pos: state.height}); }
+                         if (Math.abs(newY - viewTop) < threshold) { 
+                            newY = viewTop; 
+                            state.activeSnapLines.push({type: 'h', pos: viewTop}); 
+                         }
+                         else if (Math.abs((newY + stampH) - viewBottom) < threshold) { 
+                            newY = viewBottom - stampH; 
+                            state.activeSnapLines.push({type: 'h', pos: viewBottom}); 
+                        }
                     }
                 }
                 stamp.x = newX;
