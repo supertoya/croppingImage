@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Image Tool | クロップ・スタンプ・リサイズ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/psd.js/3.2.0/psd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'M PLUS Rounded 1c', sans-serif; 
+            background-color: #fff5f7;
+            background-image: radial-gradient(#fecdd3 1px, transparent 1px);
+            background-size: 24px 24px;
+            overscroll-behavior: none;
+        }
+        
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fade-in-up 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #f9a8d4; border-radius: 10px; border: 2px solid #fff5f7; }
+        ::-webkit-scrollbar-thumb:hover { background-color: #f472b6; }
+
+        .dashed-border {
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='30' ry='30' stroke='%23fbcfe8' stroke-width='4' stroke-dasharray='16%2c 16' stroke-dashoffset='0' stroke-linecap='round'/%3e%3c/svg%3e");
+            transition: all 0.3s ease;
+        }
+        .dashed-border:hover, .dashed-border.active {
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='30' ry='30' stroke='%23ec4899' stroke-width='4' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='round'/%3e%3c/svg%3e");
+            background-color: #fff1f2;
+            transform: scale(1.02);
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #ec4899;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 6px rgba(236, 72, 153, 0.3);
+            cursor: pointer;
+            margin-top: -8px;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.3); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #fce7f3;
+            border-radius: 10px;
+        }
+        
+        canvas { touch-action: none; }
+
+        .format-radio:checked + div {
+            background: linear-gradient(135deg, #f472b6 0%, #db2777 100%);
+            border-color: transparent;
+            color: #ffffff;
+            font-weight: 800;
+            box-shadow: 0 4px 10px rgba(219, 39, 119, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .tab-btn { transition: all 0.3s; border-radius: 12px; }
+        .tab-btn.active { 
+            background-color: #fff;
+            color: #db2777; 
+            box-shadow: 0 4px 12px rgba(219, 39, 119, 0.15);
+            font-weight: 800;
+        }
+        .tab-btn:not(.active):hover {
+            background-color: rgba(255,255,255,0.6);
+            color: #be185d;
+        }
+        
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid rgba(236, 72, 153, 0.2);
+            border-radius: 50%;
+            border-top-color: #ec4899;
+            animation: spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+    </style>
+</head>
+<body class="text-slate-700 min-h-screen flex flex-col">
+
+    <nav class="glass-panel sticky top-0 z-30 shadow-sm">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3 cursor-pointer group" onclick="location.reload()">
+                    <div class="bg-gradient-to-br from-pink-400 to-purple-500 text-white w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-200 group-hover:rotate-12 transition-transform duration-300">
+                        <i class="fa-solid fa-layer-group text-lg"></i>
+                    </div>
+                    <span class="font-extrabold text-xl tracking-tight text-slate-800">Smart<span class="text-pink-500">ImageTool</span></span>
+                </div>
+                <div id="header-actions" class="hidden animate-fade-in-up">
+                     <button id="header-reset-btn" class="bg-white text-slate-500 hover:text-pink-500 hover:bg-pink-50 border border-slate-100 text-sm font-bold py-2 px-4 rounded-full transition-all flex items-center gap-2 shadow-sm hover:shadow-md transform hover:-translate-y-0.5">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>新しく作る</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow relative w-full max-w-[1400px] mx-auto px-4 py-6 sm:px-6 lg:px-8 h-[calc(100vh-4rem)]">
+        
+        <div id="loading-overlay" class="hidden fixed inset-0 z-50 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center transition-opacity duration-300">
+            <div class="spinner mb-4"></div>
+            <p id="loading-text" class="text-pink-500 font-bold animate-pulse tracking-wide text-lg">読み込んでいます...</p>
+        </div>
+
+        <!-- Upload View -->
+        <div id="upload-view" class="max-w-3xl mx-auto mt-8 sm:mt-16 transition-all duration-500 ease-in-out px-4">
+            <div class="text-center mb-10">
+                <h1 class="text-3xl sm:text-5xl font-extrabold text-slate-800 mb-4 leading-tight drop-shadow-sm">
+                    画像編集を、<br class="sm:hidden">もっと自由に。
+                </h1>
+                <p class="text-slate-500 font-medium text-lg">正方形クロップ、リサイズ、スタンプ合成まで。<br>ブラウザだけで完結する、シンプルな画像処理ツール。</p>
+            </div>
+
+            <div id="upload-area" class="relative group cursor-pointer animate-fade-in-up bg-white p-3 rounded-[2.5rem] shadow-xl shadow-pink-100">
+                <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*, .psd">
+                
+                <div class="dashed-border rounded-[2rem] p-12 text-center h-72 flex flex-col items-center justify-center transition-all">
+                    <div class="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mb-5 text-pink-500 group-hover:scale-110 group-hover:bg-pink-200 transition-all duration-300 shadow-inner">
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-700 mb-2">画像をドラッグ＆ドロップ</h3>
+                    <p class="text-sm text-slate-400 font-bold mb-6 bg-slate-50 px-4 py-1 rounded-full inline-block">またはクリックしてファイルを選択</p>
+                    <div class="flex flex-wrap gap-2 justify-center">
+                        <span class="px-3 py-1 bg-white border border-pink-100 text-pink-400 rounded-full text-xs font-bold shadow-sm">JPG</span>
+                        <span class="px-3 py-1 bg-white border border-blue-100 text-blue-400 rounded-full text-xs font-bold shadow-sm">PNG</span>
+                        <span class="px-3 py-1 bg-white border border-purple-100 text-purple-400 rounded-full text-xs font-bold shadow-sm">WebP</span>
+                        <span class="px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-xs font-bold shadow-sm">PSD</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Editor View -->
+        <div id="editor-view" class="hidden animate-fade-in-up h-full pb-2">
+            <div class="bg-white/80 backdrop-blur-sm rounded-[2rem] shadow-2xl shadow-pink-100/50 overflow-hidden border border-white flex flex-col lg:flex-row h-full max-h-[850px]">
+                
+                <!-- Left: Canvas -->
+                <div class="lg:flex-grow relative flex flex-col overflow-hidden bg-slate-50">
+                    
+                    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-slate-200/80 backdrop-blur p-1.5 rounded-2xl flex gap-1 shadow-lg w-[90%] max-w-sm">
+                        <button id="tab-crop" class="tab-btn flex-1 py-2.5 text-sm flex items-center justify-center gap-2 active font-bold">
+                            <i class="fa-solid fa-crop-simple"></i> 正方形クロップ
+                        </button>
+                        <button id="tab-resize" class="tab-btn flex-1 py-2.5 text-sm flex items-center justify-center gap-2 font-bold">
+                            <i class="fa-solid fa-expand"></i> リサイズ
+                        </button>
+                    </div>
+
+                    <div class="flex-grow flex items-center justify-center p-8 overflow-auto relative">
+                        <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;"></div>
+
+                        <div class="relative shadow-2xl shadow-slate-400/20 rounded-xl overflow-hidden ring-8 ring-white cursor-grab transition-transform duration-300 group" id="canvas-container">
+                            <canvas id="editor-canvas" width="350" height="350" class="block bg-slate-100"></canvas>
+                            <!-- Guides -->
+                            <div id="crop-guides" class="absolute inset-0 pointer-events-none opacity-60 group-hover:opacity-90 transition-opacity">
+                                <div class="absolute top-1/3 w-full h-0.5 bg-white/80 shadow-sm"></div>
+                                <div class="absolute top-2/3 w-full h-0.5 bg-white/80 shadow-sm"></div>
+                                <div class="absolute left-1/3 h-full w-0.5 bg-white/80 shadow-sm"></div>
+                                <div class="absolute left-2/3 h-full w-0.5 bg-white/80 shadow-sm"></div>
+                                <div class="absolute inset-0 border-4 border-white/40 rounded-xl"></div>
+                            </div>
+                            <!-- Hint -->
+                            <div id="interaction-hint" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur text-white text-xs px-4 py-2 rounded-full pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap font-bold shadow-lg transform translate-y-2 group-hover:translate-y-0">
+                                ドラッグして位置を調整
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white border-t border-slate-100 px-6 py-3 flex justify-between items-center text-xs text-slate-500 shrink-0">
+                        <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                            <span class="font-bold text-slate-400">ORIGINAL</span>
+                            <span id="original-info" class="font-mono font-bold text-slate-600"></span>
+                        </div>
+                        <div id="height-calc-info" class="hidden bg-indigo-50 px-3 py-1.5 rounded-full text-indigo-600 font-bold">
+                            高さ自動: <span id="calc-height-val" class="font-mono ml-1">--</span>px
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="lg:w-[360px] flex flex-col bg-white border-l border-slate-100 z-20 shrink-0">
+                    <div class="flex-grow overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                        
+                        <!-- Crop Controls -->
+                        <div id="crop-controls">
+                            <h3 class="text-xs font-extrabold text-pink-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-sliders"></i> 調整
+                            </h3>
+                            <div class="bg-pink-50/50 p-5 rounded-2xl border border-pink-100 space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs font-bold text-slate-600">ズーム</span>
+                                    <span id="zoom-value" class="text-[10px] font-mono font-bold bg-white border border-pink-100 px-2 py-1 rounded-md text-pink-500 shadow-sm">100%</span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <button id="zoom-out" class="w-8 h-8 bg-white rounded-full text-pink-400 hover:text-pink-600 hover:bg-pink-100 transition-colors shadow-sm flex items-center justify-center"><i class="fa-solid fa-minus text-xs"></i></button>
+                                    <input type="range" id="zoom-slider" min="1" max="3" step="0.01" value="1" class="flex-grow">
+                                    <button id="zoom-in" class="w-8 h-8 bg-white rounded-full text-pink-400 hover:text-pink-600 hover:bg-pink-100 transition-colors shadow-sm flex items-center justify-center"><i class="fa-solid fa-plus text-xs"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stamp Controls -->
+                        <div>
+                            <h3 class="text-xs font-extrabold text-purple-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-icons"></i> スタンプ合成
+                            </h3>
+                            
+                            <label class="cursor-pointer block w-full mb-3 group">
+                                <div class="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-2xl text-purple-400 hover:text-purple-600 hover:border-purple-400 hover:bg-purple-50 transition-all text-xs font-bold group-hover:scale-[1.02]">
+                                    <i class="fa-solid fa-plus-circle text-lg"></i>
+                                    スタンプを追加
+                                </div>
+                                <input type="file" id="stamp-input" class="hidden" accept="image/*">
+                            </label>
+
+                            <div id="stamp-controls" class="hidden bg-white p-4 rounded-2xl border border-slate-100 shadow-lg shadow-purple-100/50 relative animate-fade-in-up">
+                                <button id="delete-stamp-btn" class="absolute top-3 right-3 w-6 h-6 bg-red-100 text-red-500 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors text-[10px]">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                                
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-[10px] font-bold text-purple-500 flex items-center gap-1">
+                                        <span class="w-2 h-2 rounded-full bg-purple-500 inline-block"></span>
+                                        サイズ調整
+                                    </p>
+                                    <label class="flex items-center gap-1.5 cursor-pointer group select-none">
+                                        <div class="relative">
+                                            <input type="checkbox" id="snap-toggle" class="sr-only peer" checked>
+                                            <div class="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-400"></div>
+                                        </div>
+                                        <span class="text-[10px] font-bold text-slate-400 peer-checked:text-purple-500 group-hover:text-purple-500 transition-colors">吸着</span>
+                                    </label>
+                                </div>
+                                <input type="range" id="stamp-size-slider" min="0.1" max="5.0" step="0.05" value="1.0" class="w-full">
+                            </div>
+                        </div>
+
+                        <!-- Output Settings -->
+                        <div>
+                            <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-gear"></i> 出力設定
+                            </h3>
+                            <div class="space-y-5">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 mb-2 pl-1">ファイル形式</label>
+                                    <div class="flex gap-3">
+                                        <label class="flex-1 cursor-pointer group">
+                                            <input type="radio" name="format" value="png" class="format-radio hidden" checked>
+                                            <div class="text-center text-xs py-2.5 border border-slate-200 rounded-xl text-slate-500 bg-white group-hover:border-pink-200 transition-all">PNG</div>
+                                        </label>
+                                        <label class="flex-1 cursor-pointer group">
+                                            <input type="radio" name="format" value="jpg" class="format-radio hidden">
+                                            <div class="text-center text-xs py-2.5 border border-slate-200 rounded-xl text-slate-500 bg-white group-hover:border-pink-200 transition-all">JPG</div>
+                                        </label>
+                                        <label class="flex-1 cursor-pointer group">
+                                            <input type="radio" name="format" value="webp" class="format-radio hidden">
+                                            <div class="text-center text-xs py-2.5 border border-slate-200 rounded-xl text-slate-500 bg-white group-hover:border-pink-200 transition-all">WebP</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between items-center mb-2 pl-1">
+                                        <label id="size-label" class="block text-[10px] font-bold text-slate-500">サイズ (px)</label>
+                                        <button type="button" id="max-size-btn" class="text-[10px] text-pink-500 font-bold hover:underline bg-pink-50 px-2 py-0.5 rounded-md">最大: <span id="max-size-val">0</span></button>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="size-input" class="w-full bg-slate-50 border-2 border-transparent focus:bg-white focus:border-pink-400 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-slate-700 outline-none transition-all" placeholder="1080">
+                                        <span class="absolute right-4 top-3 text-xs text-slate-400 pointer-events-none font-bold">px</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 mb-2 pl-1">ファイル名</label>
+                                    <div class="flex shadow-sm rounded-xl overflow-hidden">
+                                        <input type="text" id="filename-input" class="flex-grow min-w-0 bg-slate-50 border-2 border-transparent focus:bg-white focus:border-pink-400 px-4 py-2.5 text-sm font-bold text-slate-700 outline-none transition-all" placeholder="image">
+                                        <div id="file-ext-display" class="bg-slate-100 px-4 flex items-center text-xs text-slate-500 font-mono font-bold border-l border-white">.png</div>
+                                    </div>
+                                </div>
+                                <div id="compression-settings" class="hidden bg-orange-50 p-4 rounded-2xl border border-orange-100 animate-fade-in-up">
+                                    <label class="block text-[10px] font-bold text-orange-700 mb-2 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-compress bg-orange-200 text-orange-700 rounded-full p-1 text-[8px]"></i> 容量圧縮 (任意)
+                                    </label>
+                                    <div class="relative">
+                                        <input type="number" id="target-kb-input" class="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-orange-800 focus:ring-2 focus:ring-orange-400 outline-none" placeholder="指定なし">
+                                        <span class="absolute right-3 top-2 text-[10px] text-orange-400 pointer-events-none font-bold">KB以下</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="p-6 border-t border-slate-100 bg-white/50 backdrop-blur">
+                        <button id="download-btn" class="w-full bg-slate-900 text-white font-bold py-4 px-4 rounded-2xl shadow-xl shadow-slate-300/50 hover:shadow-2xl hover:shadow-pink-500/30 hover:bg-gradient-to-r hover:from-pink-500 hover:to-purple-600 transition-all duration-300 flex items-center justify-center gap-2 transform active:scale-[0.98] group">
+                            <i class="fa-solid fa-download group-hover:animate-bounce"></i>
+                            <span class="text-sm tracking-wide">画像を保存する</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const UI = {
+            fileInput: document.getElementById('file-input'),
+            uploadArea: document.getElementById('upload-area'),
+            uploadView: document.getElementById('upload-view'),
+            editorView: document.getElementById('editor-view'),
+            downloadBtn: document.getElementById('download-btn'),
+            headerResetBtn: document.getElementById('header-reset-btn'),
+            headerActions: document.getElementById('header-actions'),
+            
+            filenameInput: document.getElementById('filename-input'),
+            fileExtDisplay: document.getElementById('file-ext-display'),
+            sizeInput: document.getElementById('size-input'),
+            sizeLabel: document.getElementById('size-label'),
+            maxSizeBtn: document.getElementById('max-size-btn'),
+            maxSizeVal: document.getElementById('max-size-val'),
+            heightCalcInfo: document.getElementById('height-calc-info'),
+            calcHeightVal: document.getElementById('calc-height-val'),
+            formatRadios: document.querySelectorAll('input[name="format"]'),
+            compressionSettings: document.getElementById('compression-settings'),
+            targetKbInput: document.getElementById('target-kb-input'),
+
+            zoomSlider: document.getElementById('zoom-slider'),
+            zoomValue: document.getElementById('zoom-value'),
+            zoomInBtn: document.getElementById('zoom-in'),
+            zoomOutBtn: document.getElementById('zoom-out'),
+            cropControls: document.getElementById('crop-controls'),
+            
+            stampInput: document.getElementById('stamp-input'),
+            stampControls: document.getElementById('stamp-controls'),
+            stampSizeSlider: document.getElementById('stamp-size-slider'),
+            deleteStampBtn: document.getElementById('delete-stamp-btn'),
+            snapToggle: document.getElementById('snap-toggle'),
+
+            loadingOverlay: document.getElementById('loading-overlay'),
+            loadingText: document.getElementById('loading-text'),
+            canvas: document.getElementById('editor-canvas'),
+            originalInfo: document.getElementById('original-info'),
+            container: document.getElementById('canvas-container'),
+            cropGuides: document.getElementById('crop-guides'),
+            interactionHint: document.getElementById('interaction-hint'),
+            
+            tabCrop: document.getElementById('tab-crop'),
+            tabResize: document.getElementById('tab-resize'),
+        };
+
+        const ctx = UI.canvas.getContext('2d');
+
+        let state = {
+            mode: 'crop',
+            img: null,
+            width: 0, height: 0,
+            crop: { scale: 1, x: 0, y: 0, minScale: 1 },
+            resize: { viewScale: 1 },
+            stamps: [],
+            selectedStampIndex: -1,
+            dragMode: null, // 'crop' | 'stamp' | 'scale_stamp'
+            isDragging: false,
+            dragStart: { x: 0, y: 0 },
+            targetStart: { x: 0, y: 0 },
+            targetScaleStart: 1,
+            canvasSize: 350,
+            outputFormat: 'png',
+            activeSnapLines: []
+        };
+
+        // Event Listeners
+        UI.fileInput.addEventListener('change', handleFileSelect);
+        UI.headerResetBtn.addEventListener('click', resetTool);
+        UI.downloadBtn.addEventListener('click', downloadImage);
+        UI.zoomSlider.addEventListener('input', handleZoom);
+        UI.zoomInBtn.addEventListener('click', () => adjustZoom(0.1));
+        UI.zoomOutBtn.addEventListener('click', () => adjustZoom(-0.1));
+        UI.maxSizeBtn.addEventListener('click', setMaxSize);
+        UI.sizeInput.addEventListener('input', updateHeightCalc);
+        UI.formatRadios.forEach(radio => radio.addEventListener('change', handleFormatChange));
+        UI.tabCrop.addEventListener('click', () => switchMode('crop'));
+        UI.tabResize.addEventListener('click', () => switchMode('resize'));
+        UI.stampInput.addEventListener('change', handleStampUpload);
+        UI.stampSizeSlider.addEventListener('input', handleStampSize);
+        UI.deleteStampBtn.addEventListener('click', deleteSelectedStamp);
+
+        UI.container.addEventListener('mousedown', startDrag);
+        window.addEventListener('mousemove', drag);
+        window.addEventListener('mouseup', endDrag);
+        UI.container.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
+        window.addEventListener('touchmove', (e) => {
+            if(state.isDragging) e.preventDefault();
+            drag(e.touches[0]);
+        }, {passive: false});
+        window.addEventListener('touchend', endDrag);
+
+        ['dragenter', 'dragover'].forEach(eName => {
+            UI.uploadArea.addEventListener(eName, (e) => {
+                e.preventDefault();
+                UI.uploadArea.querySelector('.dashed-border').classList.add('active');
+            });
+        });
+        ['dragleave', 'drop'].forEach(eName => {
+            UI.uploadArea.addEventListener(eName, (e) => {
+                e.preventDefault();
+                UI.uploadArea.querySelector('.dashed-border').classList.remove('active');
+            });
+        });
+        UI.uploadArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if(files.length > 0) {
+                UI.fileInput.files = files;
+                handleFileSelect({ target: UI.fileInput });
+            }
+        });
+
+        // Logic
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const nameParts = file.name.split('.');
+            if (nameParts.length > 1) nameParts.pop();
+            UI.filenameInput.value = nameParts.join('.');
+            showLoading(true, "読み込んでいます...");
+
+            if (file.name.toLowerCase().endsWith('.psd')) {
+                const url = URL.createObjectURL(file);
+                PSD.fromURL(url).then(psd => {
+                    const pngUrl = psd.image.toBase64();
+                    loadImage(pngUrl);
+                    URL.revokeObjectURL(url);
+                }).catch(err => {
+                    console.error(err);
+                    alert('PSDファイルの読み込みに失敗しました。');
+                    showLoading(false);
+                    UI.fileInput.value = '';
+                });
+            } else if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    loadImage(event.target.result);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert('対応していないファイル形式です');
+                showLoading(false);
+                UI.fileInput.value = '';
+            }
+        }
+
+        function loadImage(src) {
+            state.img = new Image();
+            state.img.onload = () => {
+                initEditor();
+                showLoading(false);
+            };
+            state.img.onerror = () => {
+                alert('画像の読み込みに失敗しました。');
+                showLoading(false);
+                UI.fileInput.value = '';
+            };
+            state.img.src = src;
+        }
+
+        function initEditor() {
+            state.width = state.img.width;
+            state.height = state.img.height;
+            state.stamps = [];
+            state.selectedStampIndex = -1;
+            UI.originalInfo.textContent = `${state.width} x ${state.height}`;
+            
+            const minSide = Math.min(state.width, state.height);
+            state.crop.minScale = state.canvasSize / minSide;
+            state.crop.scale = state.crop.minScale;
+            state.crop.x = (state.canvasSize - state.width * state.crop.scale) / 2;
+            state.crop.y = (state.canvasSize - state.height * state.crop.scale) / 2;
+
+            const scaleX = state.canvasSize / state.width;
+            const scaleY = state.canvasSize / state.height;
+            state.resize.viewScale = Math.min(scaleX, scaleY);
+
+            UI.zoomSlider.min = state.crop.minScale;
+            UI.zoomSlider.max = state.crop.minScale * 3;
+            UI.zoomSlider.step = (state.crop.minScale * 2) / 200;
+            
+            handleFormatChange();
+            updateStampUI();
+            switchMode('crop');
+            
+            UI.uploadView.classList.add('hidden');
+            UI.editorView.classList.remove('hidden');
+            if (UI.headerActions) {
+                UI.headerActions.classList.remove('hidden');
+            }
+        }
+
+        function switchMode(mode) {
+            state.mode = mode;
+            state.selectedStampIndex = -1;
+            state.activeSnapLines = [];
+            updateStampUI();
+            
+            if (mode === 'crop') {
+                UI.tabCrop.classList.add('active');
+                UI.tabResize.classList.remove('active');
+                UI.container.classList.remove('cursor-default');
+                UI.container.classList.add('cursor-grab');
+                UI.cropGuides.classList.remove('hidden');
+                UI.cropControls.classList.remove('hidden');
+                UI.interactionHint.textContent = "ドラッグして位置を調整";
+                UI.sizeLabel.textContent = "サイズ (正方形 px)";
+                UI.heightCalcInfo.classList.add('hidden');
+                const minSide = Math.min(state.width, state.height);
+                UI.sizeInput.value = minSide;
+                UI.maxSizeVal.textContent = minSide;
+                updateZoomDisplay();
+                UI.zoomSlider.value = state.crop.scale;
+            } else {
+                UI.tabResize.classList.add('active');
+                UI.tabCrop.classList.remove('active');
+                UI.container.classList.remove('cursor-grab');
+                UI.container.classList.add('cursor-default');
+                UI.cropGuides.classList.add('hidden');
+                UI.cropControls.classList.add('hidden');
+                UI.interactionHint.textContent = "スタンプを選択して移動";
+                UI.sizeLabel.textContent = "サイズ (横幅 px)";
+                UI.heightCalcInfo.classList.remove('hidden');
+                UI.sizeInput.value = state.width;
+                UI.maxSizeVal.textContent = state.width;
+                updateHeightCalc();
+            }
+            draw();
+        }
+
+        function handleFormatChange() {
+            const format = document.querySelector('input[name="format"]:checked').value;
+            state.outputFormat = format;
+            UI.fileExtDisplay.textContent = `.${format}`;
+            if (format === 'jpg' || format === 'webp') {
+                UI.compressionSettings.classList.remove('hidden');
+            } else {
+                UI.compressionSettings.classList.add('hidden');
+            }
+        }
+
+        function handleStampUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    addStamp(img);
+                    UI.stampInput.value = '';
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function addStamp(img) {
+            const targetSize = Math.min(state.width, state.height) * 0.3;
+            const scale = targetSize / Math.max(img.width, img.height);
+            const x = (state.width - img.width * scale) / 2;
+            const y = (state.height - img.height * scale) / 2;
+            state.stamps.push({ img: img, width: img.width, height: img.height, x: x, y: y, scale: scale });
+            state.selectedStampIndex = state.stamps.length - 1;
+            updateStampUI();
+            draw();
+        }
+
+        function updateStampUI() {
+            if (state.selectedStampIndex >= 0 && state.stamps[state.selectedStampIndex]) {
+                UI.stampControls.classList.remove('hidden');
+                UI.stampSizeSlider.value = 1.0; // Reset to relative center? No, just keep as is for simple interaction
+                // For consistent slider behavior, we might want to track absolute scale but for now relative adjustment is fine
+                UI.stampSizeSlider.value = 1.0; 
+            } else {
+                UI.stampControls.classList.add('hidden');
+            }
+        }
+
+        function handleStampSize(e) {
+            if (state.selectedStampIndex < 0) return;
+            const factor = parseFloat(e.target.value);
+            if (!this.lastVal) this.lastVal = 1.0;
+            const ratio = factor / this.lastVal;
+            this.lastVal = factor;
+            const stamp = state.stamps[state.selectedStampIndex];
+            const oldW = stamp.width * stamp.scale;
+            const oldH = stamp.height * stamp.scale;
+            stamp.scale *= ratio;
+            const newW = stamp.width * stamp.scale;
+            const newH = stamp.height * stamp.scale;
+            stamp.x -= (newW - oldW) / 2;
+            stamp.y -= (newH - oldH) / 2;
+            draw();
+        }
+        UI.stampSizeSlider.addEventListener('mousedown', function() { this.lastVal = parseFloat(this.value); });
+        UI.stampSizeSlider.addEventListener('touchstart', function() { this.lastVal = parseFloat(this.value); }, {passive: true});
+
+        function deleteSelectedStamp() {
+            if (state.selectedStampIndex >= 0) {
+                state.stamps.splice(state.selectedStampIndex, 1);
+                state.selectedStampIndex = -1;
+                updateStampUI();
+                draw();
+            }
+        }
+
+        function draw() {
+            if (!state.img) return;
+            ctx.clearRect(0, 0, UI.canvas.width, UI.canvas.height);
+            ctx.fillStyle = '#f1f5f9'; 
+            ctx.fillRect(0, 0, UI.canvas.width, UI.canvas.height);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            let drawParams = getDrawParams();
+            ctx.drawImage(state.img, drawParams.dx, drawParams.dy, drawParams.dw, drawParams.dh);
+
+            if (state.activeSnapLines && state.activeSnapLines.length > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#ec4899'; 
+                ctx.lineWidth = 2;
+                state.activeSnapLines.forEach(line => {
+                    if (line.type === 'v') {
+                        const x = drawParams.dx + line.pos * drawParams.scale;
+                        ctx.moveTo(x, 0);
+                        ctx.lineTo(x, UI.canvas.height);
+                    } else {
+                        const y = drawParams.dy + line.pos * drawParams.scale;
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(UI.canvas.width, y);
+                    }
+                });
+                ctx.stroke();
+            }
+
+            state.stamps.forEach((stamp, index) => {
+                const sx = drawParams.dx + stamp.x * drawParams.scale;
+                const sy = drawParams.dy + stamp.y * drawParams.scale;
+                const sw = stamp.width * stamp.scale * drawParams.scale;
+                const sh = stamp.height * stamp.scale * drawParams.scale;
+                ctx.drawImage(stamp.img, sx, sy, sw, sh);
+
+                if (index === state.selectedStampIndex) {
+                    ctx.strokeStyle = '#ec4899';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeRect(sx, sy, sw, sh);
+                    ctx.setLineDash([]);
+                    
+                    ctx.fillStyle = '#fff';
+                    const handleSize = 12;
+                    // Draw 4 corner handles
+                    [
+                        [sx, sy], [sx+sw, sy], [sx+sw, sy+sh], [sx, sy+sh]
+                    ].forEach(([hx, hy]) => {
+                        ctx.shadowColor = "rgba(0,0,0,0.3)";
+                        ctx.shadowBlur = 4;
+                        ctx.beginPath();
+                        ctx.arc(hx, hy, handleSize/2, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                        ctx.stroke();
+                    });
+                }
+            });
+        }
+
+        function getDrawParams() {
+            if (state.mode === 'crop') {
+                return { dx: state.crop.x, dy: state.crop.y, dw: state.width * state.crop.scale, dh: state.height * state.crop.scale, scale: state.crop.scale };
+            } else {
+                const dw = state.width * state.resize.viewScale;
+                const dh = state.height * state.resize.viewScale;
+                const dx = (state.canvasSize - dw) / 2;
+                const dy = (state.canvasSize - dh) / 2;
+                return { dx, dy, dw, dh, scale: state.resize.viewScale };
+            }
+        }
+
+        function startDrag(e) {
+            if(!state.img) return;
+            const rect = UI.canvas.getBoundingClientRect();
+            const clientX = e.clientX || e.pageX;
+            const clientY = e.clientY || e.pageY;
+            const mouseX = clientX - rect.left;
+            const mouseY = clientY - rect.top;
+
+            // Check for handles on selected stamp first
+            if (state.selectedStampIndex !== -1) {
+                const stamp = state.stamps[state.selectedStampIndex];
+                const drawParams = getDrawParams();
+                const sx = drawParams.dx + stamp.x * drawParams.scale;
+                const sy = drawParams.dy + stamp.y * drawParams.scale;
+                const sw = stamp.width * stamp.scale * drawParams.scale;
+                const sh = stamp.height * stamp.scale * drawParams.scale;
+                
+                const handles = [[sx, sy], [sx+sw, sy], [sx+sw, sy+sh], [sx, sy+sh]];
+                const handleHit = handles.findIndex(([hx, hy]) => {
+                    return Math.hypot(mouseX - hx, mouseY - hy) < 15;
+                });
+
+                if (handleHit !== -1) {
+                    state.isDragging = true;
+                    state.dragMode = 'scale_stamp';
+                    state.dragStart = { x: mouseX, y: mouseY };
+                    // Center-based scaling: track center
+                    state.targetStart = { x: stamp.x + (stamp.width * stamp.scale)/2, y: stamp.y + (stamp.height * stamp.scale)/2 };
+                    state.initialScale = stamp.scale;
+                    // Initial dist from center to handle in screen space
+                    const cx = sx + sw/2;
+                    const cy = sy + sh/2;
+                    state.initialHandleDist = Math.hypot(mouseX - cx, mouseY - cy);
+                    UI.container.style.cursor = 'nwse-resize';
+                    return;
+                }
+            }
+
+            let hitStampIndex = -1;
+            const drawParams = getDrawParams();
+            
+            for (let i = state.stamps.length - 1; i >= 0; i--) {
+                const stamp = state.stamps[i];
+                const sx = drawParams.dx + stamp.x * drawParams.scale;
+                const sy = drawParams.dy + stamp.y * drawParams.scale;
+                const sw = stamp.width * stamp.scale * drawParams.scale;
+                const sh = stamp.height * stamp.scale * drawParams.scale;
+                
+                if (mouseX >= sx && mouseX <= sx + sw && mouseY >= sy && mouseY <= sy + sh) {
+                    hitStampIndex = i;
+                    break;
+                }
+            }
+
+            if (hitStampIndex >= 0) {
+                state.isDragging = true;
+                state.dragMode = 'stamp';
+                state.selectedStampIndex = hitStampIndex;
+                state.dragStart = { x: mouseX, y: mouseY };
+                state.targetStart = { x: state.stamps[hitStampIndex].x, y: state.stamps[hitStampIndex].y };
+                updateStampUI();
+                draw();
+                UI.container.style.cursor = 'move';
+                return;
+            } else {
+                if (state.selectedStampIndex !== -1) {
+                    state.selectedStampIndex = -1;
+                    updateStampUI();
+                    draw();
+                }
+            }
+
+            if (state.mode === 'crop') {
+                state.isDragging = true;
+                state.dragMode = 'crop';
+                state.dragStart = { x: mouseX, y: mouseY };
+                state.targetStart = { x: state.crop.x, y: state.crop.y };
+                UI.container.style.cursor = 'grabbing';
+            }
+        }
+
+        function drag(e) {
+            if (!state.isDragging) return;
+            const rect = UI.canvas.getBoundingClientRect();
+            const clientX = e.clientX || e.pageX;
+            const clientY = e.clientY || e.pageY;
+            const mouseX = clientX - rect.left;
+            const mouseY = clientY - rect.top;
+
+            if (state.dragMode === 'scale_stamp') {
+                const stamp = state.stamps[state.selectedStampIndex];
+                const drawParams = getDrawParams();
+                
+                // Calculate current dist from stamp center (screen space)
+                const sx = drawParams.dx + stamp.x * drawParams.scale;
+                const sy = drawParams.dy + stamp.y * drawParams.scale;
+                const sw = stamp.width * stamp.scale * drawParams.scale;
+                const sh = stamp.height * stamp.scale * drawParams.scale;
+                const cx = sx + sw/2;
+                const cy = sy + sh/2;
+                
+                const currentDist = Math.hypot(mouseX - cx, mouseY - cy);
+                const scaleRatio = currentDist / state.initialHandleDist;
+                
+                const newScale = state.initialScale * scaleRatio;
+                
+                // Apply centering logic similar to slider
+                const oldW = stamp.width * stamp.scale;
+                const oldH = stamp.height * stamp.scale;
+                stamp.scale = newScale;
+                const newW = stamp.width * stamp.scale;
+                const newH = stamp.height * stamp.scale;
+                
+                stamp.x -= (newW - oldW) / 2;
+                stamp.y -= (newH - oldH) / 2;
+
+            } else if (state.dragMode === 'stamp') {
+                const stamp = state.stamps[state.selectedStampIndex];
+                const drawParams = getDrawParams();
+                const deltaX = mouseX - state.dragStart.x;
+                const deltaY = mouseY - state.dragStart.y;
+                
+                let newX = state.targetStart.x + deltaX / drawParams.scale;
+                let newY = state.targetStart.y + deltaY / drawParams.scale;
+                
+                state.activeSnapLines = [];
+
+                if (UI.snapToggle.checked) {
+                    const threshold = 10 / drawParams.scale;
+                    const stampW = stamp.width * stamp.scale;
+                    const stampH = stamp.height * stamp.scale;
+                    
+                    let snappedX = false;
+                    if (Math.abs((newX + stampW / 2) - (state.width / 2)) < threshold) {
+                        newX = (state.width / 2) - stampW / 2;
+                        state.activeSnapLines.push({type: 'v', pos: state.width / 2});
+                        snappedX = true;
+                    }
+                    if (!snappedX) {
+                        if (Math.abs(newX - 0) < threshold) { newX = 0; state.activeSnapLines.push({type: 'v', pos: 0}); }
+                        else if (Math.abs((newX + stampW) - state.width) < threshold) { newX = state.width - stampW; state.activeSnapLines.push({type: 'v', pos: state.width}); }
+                    }
+
+                    let snappedY = false;
+                    if (Math.abs((newY + stampH / 2) - (state.height / 2)) < threshold) {
+                        newY = (state.height / 2) - stampH / 2;
+                        state.activeSnapLines.push({type: 'h', pos: state.height / 2});
+                        snappedY = true;
+                    }
+                    if (!snappedY) {
+                         if (Math.abs(newY - 0) < threshold) { newY = 0; state.activeSnapLines.push({type: 'h', pos: 0}); }
+                         else if (Math.abs((newY + stampH) - state.height) < threshold) { newY = state.height - stampH; state.activeSnapLines.push({type: 'h', pos: state.height}); }
+                    }
+                }
+                stamp.x = newX;
+                stamp.y = newY;
+
+            } else if (state.dragMode === 'crop') {
+                const deltaX = mouseX - state.dragStart.x;
+                const deltaY = mouseY - state.dragStart.y;
+                state.crop.x = state.targetStart.x + deltaX;
+                state.crop.y = state.targetStart.y + deltaY;
+                constrainCrop();
+            }
+            draw();
+        }
+
+        function endDrag() {
+            state.isDragging = false;
+            state.dragMode = null;
+            state.activeSnapLines = [];
+            draw();
+            if (state.mode === 'crop') {
+                UI.container.style.cursor = 'grab';
+            } else {
+                UI.container.style.cursor = 'default';
+            }
+        }
+
+        function handleZoom(e) {
+            if (state.mode !== 'crop') return;
+            applyZoom(parseFloat(e.target.value));
+        }
+        function adjustZoom(delta) {
+            if (state.mode !== 'crop') return;
+            let newScale = state.crop.scale + (state.crop.minScale * delta * 2);
+            newScale = Math.max(parseFloat(UI.zoomSlider.min), Math.min(parseFloat(UI.zoomSlider.max), newScale));
+            UI.zoomSlider.value = newScale;
+            applyZoom(newScale);
+        }
+        function applyZoom(newScale) {
+            const centerX = (state.canvasSize / 2 - state.crop.x) / state.crop.scale;
+            const centerY = (state.canvasSize / 2 - state.crop.y) / state.crop.scale;
+            state.crop.scale = newScale;
+            state.crop.x = state.canvasSize / 2 - centerX * state.crop.scale;
+            state.crop.y = state.canvasSize / 2 - centerY * state.crop.scale;
+            constrainCrop();
+            updateZoomDisplay();
+            draw();
+        }
+        function updateZoomDisplay() {
+            const percentage = Math.round((state.crop.scale / state.crop.minScale) * 100);
+            UI.zoomValue.textContent = `${percentage}%`;
+        }
+        function constrainCrop() {
+            const currentW = state.width * state.crop.scale;
+            const currentH = state.height * state.crop.scale;
+            if (state.crop.x > 0) state.crop.x = 0;
+            if (state.crop.x + currentW < state.canvasSize) state.crop.x = state.canvasSize - currentW;
+            if (state.crop.y > 0) state.crop.y = 0;
+            if (state.crop.y + currentH < state.canvasSize) state.crop.y = state.canvasSize - currentH;
+        }
+        function setMaxSize() {
+            if (!state.img) return;
+            if (state.mode === 'crop') {
+                UI.sizeInput.value = Math.min(state.width, state.height);
+            } else {
+                UI.sizeInput.value = state.width;
+            }
+            updateHeightCalc();
+        }
+        function updateHeightCalc() {
+            if (state.mode !== 'resize' || !state.img) return;
+            const inputW = parseInt(UI.sizeInput.value);
+            if (isNaN(inputW) || inputW <= 0) {
+                UI.calcHeightVal.textContent = '--';
+                return;
+            }
+            const ratio = state.height / state.width;
+            const newH = Math.round(inputW * ratio);
+            UI.calcHeightVal.textContent = newH;
+        }
+
+        async function downloadImage() {
+            if (!state.img) return;
+            const format = state.outputFormat;
+            const targetKB = parseInt(UI.targetKbInput.value);
+            let targetW = parseInt(UI.sizeInput.value);
+            if (isNaN(targetW) || targetW <= 0) {
+                targetW = (state.mode === 'crop') ? Math.min(state.width, state.height) : state.width;
+            }
+            let targetH;
+            if (state.mode === 'crop') {
+                targetH = targetW;
+            } else {
+                targetH = Math.round(targetW * (state.height / state.width));
+            }
+
+            const outputCanvas = document.createElement('canvas');
+            outputCanvas.width = targetW;
+            outputCanvas.height = targetH;
+            const outCtx = outputCanvas.getContext('2d');
+            
+            if (format === 'jpg') {
+                outCtx.fillStyle = '#FFFFFF';
+                outCtx.fillRect(0, 0, targetW, targetH);
+            }
+            outCtx.imageSmoothingEnabled = true;
+            outCtx.imageSmoothingQuality = 'high';
+
+            let sourceX, sourceY, sourceW, sourceH;
+            if (state.mode === 'crop') {
+                sourceW = state.canvasSize / state.crop.scale;
+                sourceH = sourceW;
+                sourceX = -state.crop.x / state.crop.scale;
+                sourceY = -state.crop.y / state.crop.scale;
+            } else {
+                sourceX = 0; sourceY = 0;
+                sourceW = state.width; sourceH = state.height;
+            }
+            outCtx.drawImage(state.img, sourceX, sourceY, sourceW, sourceH, 0, 0, targetW, targetH);
+
+            const outputScale = targetW / sourceW;
+            state.stamps.forEach(stamp => {
+                const sx = (stamp.x - sourceX) * outputScale;
+                const sy = (stamp.y - sourceY) * outputScale;
+                const sw = stamp.width * stamp.scale * outputScale;
+                const sh = stamp.height * stamp.scale * outputScale;
+                outCtx.drawImage(stamp.img, sx, sy, sw, sh);
+            });
+
+            let fileName = UI.filenameInput.value.trim() || 'image';
+            fileName = fileName.replace(/\.(png|jpg|jpeg|webp)$/i, '') + `.${format}`;
+            let mimeType = `image/${format === 'jpg' ? 'jpeg' : format}`;
+            
+            if ((format === 'jpg' || format === 'webp') && !isNaN(targetKB) && targetKB > 0) {
+                await compressAndDownload(outputCanvas, fileName, targetKB, mimeType);
+            } else {
+                const quality = (format === 'jpg' || format === 'webp') ? 0.92 : undefined;
+                downloadCanvas(outputCanvas, fileName, mimeType, quality);
+            }
+        }
+
+        async function compressAndDownload(canvas, filename, targetKB, mimeType) {
+            showLoading(true, `圧縮中... 目標: ${targetKB}KB`);
+            const targetBytes = targetKB * 1024;
+            let minQ = 0.01; let maxQ = 1.0; let bestBlob = null;
+            for (let i = 0; i < 6; i++) {
+                const midQ = (minQ + maxQ) / 2;
+                const blob = await getCanvasBlob(canvas, mimeType, midQ);
+                if (blob.size <= targetBytes) {
+                    bestBlob = blob;
+                    minQ = midQ;
+                } else {
+                    maxQ = midQ;
+                }
+            }
+            if (!bestBlob) bestBlob = await getCanvasBlob(canvas, mimeType, 0.05);
+            showLoading(false);
+            saveBlob(bestBlob, filename);
+        }
+
+        function getCanvasBlob(canvas, type, quality) {
+            return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+        }
+        function downloadCanvas(canvas, filename, type, quality) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL(type, quality);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        function saveBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+        function resetTool() {
+            UI.fileInput.value = '';
+            UI.editorView.classList.add('hidden');
+            if (UI.headerActions) {
+                UI.headerActions.classList.add('hidden');
+            }
+            UI.uploadView.classList.remove('hidden');
+            state.img = null;
+            state.stamps = [];
+            ctx.clearRect(0, 0, UI.canvas.width, UI.canvas.height);
+        }
+        function showLoading(show, text) {
+            if (text) UI.loadingText.textContent = text;
+            if(show) UI.loadingOverlay.classList.remove('hidden');
+            else UI.loadingOverlay.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
